@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 
 
+#[derive(Copy, Clone)]
 pub struct LongLatCoordinates{
     pub longitude:f64,
     pub latitude:f64
 }
-
 
 impl LongLatCoordinates{
     pub fn from_cartesian(cartesian: [f64;3], time:DateTime<Utc>) -> Self{

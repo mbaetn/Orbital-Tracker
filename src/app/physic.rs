@@ -1,6 +1,6 @@
 use sgp4::{Constants, Elements, MinutesSinceEpoch, Prediction};
 use std::error::Error;
-use crate::parser::TleData; 
+use super::parser::TleData; 
 use chrono::{DateTime, Utc};
 
 /// SGP4 Propagator, derives positions and velocities for a given satellite using [TleData] structure

@@ -1,12 +1,11 @@
-use std::{error::Error, fs::metadata};
+use std::error::Error;
 use serde::Deserialize;
 use std::fs;
-use std::time::SystemTime;
 use ureq;
-use std::io::{ErrorKind};
+
 
 /// Structure to keep satellite information using Two Line Element format
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct TleData{
     /// ID of the satellite
     #[serde(rename="NORAD_CAT_ID")]
