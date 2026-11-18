@@ -7,9 +7,9 @@ use crossterm::{
 };
 
 
-mod parser;
-use parser::ApiClient;
-use parser::TleData;
+mod api;
+use api::ApiClient;
+use api::TleData;
 mod physic;
 use physic::SGP4Propagator;
 use crate::app::interface::coordinates::LongLatCoordinates;
@@ -30,10 +30,11 @@ impl App{
     pub fn init()-> Result<Self, Box<dyn Error>>{
         dotenv().ok();
         let api_key = env::var("API_KEY").expect("No API_KEY found");
-        let base_url = "https://api.keeptrack.space/v4/sats/25544";
+        let base_url = "https://api.keeptrack.space/v4/sats";
 
         let api =  ApiClient::new(base_url, &api_key);
         let satellites:Vec<TleData> = api.get_satellites_informations()?;
+        println!("{:?}", satellites.len());
 
         let target = satellites.first().unwrap();
         let propagator = SGP4Propagator::new(&target)?;        

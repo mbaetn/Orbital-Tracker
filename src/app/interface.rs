@@ -6,14 +6,14 @@ use crossterm::{
 use crossterm::event::{KeyEvent, KeyCode::{Char}, KeyModifiers};
 use std::io::{stdout, Error, Stdout};
 use ratatui::{
-    Terminal, backend::CrosstermBackend, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, widgets::{Block, BorderType, Borders, Padding, Row, Table, TableState, Widget, canvas::{Canvas, Map, MapResolution, Points}},
+    Terminal, backend::CrosstermBackend, layout::{Constraint, Direction, Layout}, macros::constraint, style::{Color, Modifier, Style}, widgets::{Block, BorderType, Borders, Padding, Row, Table, TableState, Widget, canvas::{Canvas, Map, MapResolution, Points}},
 };
 
 // Internal imports 
 pub mod coordinates;
 use coordinates::LongLatCoordinates;
 
-use crate::app::parser::TleData;
+use crate::app::api::TleData;
 
 pub enum System{
     Quit,
@@ -48,27 +48,31 @@ impl Interface{
         self.terminal.draw(|frame| {
             let area = frame.area();
 
-            let horizontal_layouts  = Layout::default()
+            let outer_layout  = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1) 
                 .constraints(vec![Constraint::Percentage(70), Constraint::Length(1), Constraint::Percentage(30)]) // Length 1 is a spacer
                 .split(area);
+            let inner_layer = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(outer_layout[2]);
 
             let canvas = Self::get_map_canvas(pos, history);
             let infos = Self::get_table(pos, target);
+            let zoomed_map = Self::get_zoomed_canvas(pos);
             
-            frame.render_widget(canvas, horizontal_layouts[0]);
-            // frame.render_widget(infos, horizontal_layouts[2]);
-            frame.render_stateful_widget(infos, horizontal_layouts[2], &mut self.table_state);
-            // frame.render_widget(Paragraph::new("Name satellite"), horizontal_layouts[1]);
+            frame.render_widget(canvas, outer_layout[0]);
+            frame.render_stateful_widget(infos, inner_layer[0], &mut self.table_state);
+            frame.render_widget(zoomed_map, inner_layer[1]);
         })?;
         Ok(())
     }
 
     fn get_table(pos:LongLatCoordinates, target: &TleData) -> Table<'static>{
         let rows = [Row::new(vec![
-            target.name.clone(),
-            target.norad_id.clone(), 
+            // target.name.unwrap(),
+            // target.norad_id.clone(), 
            format!("{:.2}", pos.longitude), 
            format!("{:.2}", pos.latitude)
             ])
@@ -88,7 +92,7 @@ impl Interface{
     
             .column_spacing(1)
             .header(
-                Row::new(vec!["Name", "Norad ID", "Longitude", "Latitude"])
+                Row::new(vec!["Name","Longitude", "Latitude"])
                 .style(Style::default().add_modifier(Modifier::BOLD))
                 .bottom_margin(1)
                 
@@ -97,6 +101,27 @@ impl Interface{
             .row_highlight_style(Style::new().reversed())
             .highlight_symbol(">>")
         
+    }
+
+    fn get_zoomed_canvas(pos:LongLatCoordinates) -> impl Widget{
+        let zoom_space = 20.0;
+        Canvas::default()
+            .block(Block::default()
+                .title("Zoom")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+            )
+            .x_bounds([pos.longitude - zoom_space, pos.longitude + zoom_space])
+            .y_bounds([pos.latitude - zoom_space*0.5, pos.latitude + zoom_space*0.5])
+            .paint(move |ctx| {
+                ctx.draw(&Map{
+                    color: Color::White, 
+                    resolution: MapResolution::High, 
+                });
+
+                ctx.print(pos.longitude, pos.latitude, "🛰️");
+            })
+
     }
 
     fn get_map_canvas(pos:LongLatCoordinates, history: &[LongLatCoordinates]) -> impl Widget{

@@ -1,6 +1,6 @@
 use sgp4::{Constants, Elements, MinutesSinceEpoch, Prediction};
 use std::error::Error;
-use super::parser::TleData; 
+use super::api::TleData; 
 use chrono::{DateTime, Utc};
 
 /// SGP4 Propagator, derives positions and velocities for a given satellite using [TleData] structure
@@ -17,7 +17,8 @@ impl SGP4Propagator {
     /// `target` : satellite informations obtained with an API call
     pub fn new(target: &TleData) -> Result<Self, Box<dyn Error>> {
         let elt = Elements::from_tle(
-            Some(target.name.to_owned()), 
+            Some("ISS".to_string()),
+            // Some(target.name.to_owned()), 
             target.line_1.as_bytes(), 
             target.line_2.as_bytes()
         )?;
