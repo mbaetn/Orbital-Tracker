@@ -23,6 +23,7 @@ pub struct TleData{
     pub line_2: String,
 }
 
+
 pub struct ApiClient{
     base_url: String,
     api_key: String,
@@ -65,7 +66,8 @@ impl ApiClient{
         };
     
 
-        let satellites: Vec<TleData> = serde_json::from_str(&response)?;
+        let mut satellites: Vec<TleData> = serde_json::from_str(&response)?;
+        satellites.retain(|target| target.name.is_some());
         Ok(satellites)
     }
 }

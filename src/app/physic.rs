@@ -8,8 +8,6 @@ pub struct SGP4Propagator {
     constants: Constants,
     epoch: DateTime<Utc>,
 }
-
-
 impl SGP4Propagator {
     
     /// Initializes propagator 

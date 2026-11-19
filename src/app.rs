@@ -16,11 +16,12 @@ use crate::app::interface::coordinates::LongLatCoordinates;
 mod interface;
 use interface::System;
 use interface::Interface;
+mod satellite_entity;
+use satellite_entity::SatelliteEntity;
 
 pub struct App{
-    propagator: SGP4Propagator,
+    satellites: Vec<SatelliteEntity>,
     history: Vec<LongLatCoordinates>,
-    target: TleData,
     should_quit: bool,
 }
 
@@ -33,19 +34,22 @@ impl App{
         let base_url = "https://api.keeptrack.space/v4/sats";
 
         let api =  ApiClient::new(base_url, &api_key);
-        let satellites:Vec<TleData> = api.get_satellites_informations()?;
-        println!("{:?}", satellites.len());
+        let tle_satellites:Vec<TleData> = api.get_satellites_informations()?;
 
-        let target = satellites.first().unwrap();
-        let propagator = SGP4Propagator::new(&target)?;        
-        
-    
+        let satellites: Vec<SatelliteEntity> =  tle_satellites.into_iter().filter_map(|target| Self::to_satellite_entity(target).ok().flatten()).collect();
+
         let history = Vec::new();
         let should_quit = false;
-        let res = Self{propagator, target:target.clone(), history, should_quit};
+        let res = Self{satellites, history, should_quit};
 
         Ok(res)
 
+
+    }
+
+    fn to_satellite_entity(target: TleData) -> Result<Option<SatelliteEntity>, Box<dyn Error>>{
+        let propagator = SGP4Propagator::new(&target)?;
+        Ok(Some(SatelliteEntity::new(target, propagator)))
 
     }
     pub fn run(&mut self) -> Result<(), Box<dyn Error>>{
@@ -54,14 +58,16 @@ impl App{
         self.history = self.update_history(45)?;
 
         while !self.should_quit{
-            let predictions = self.propagator.get_position(Utc::now())?;
+            let target = &self.satellites[0];
+            let propagator = target.get_propagator();
+            let predictions = propagator.get_position(Utc::now())?;
             let cartesians = predictions.position;
 
 
             // let text = format!("X:{:.2} ; Y:{:.2} ; Z:{:.2}", positions[0], positions[1], positions[2]);
             let pos = LongLatCoordinates::from_cartesian(cartesians, Utc::now());
             // let text = "🛰️";
-            ui.draw(pos, &self.target, &self.history)?;
+            ui.draw(pos, &target.get_tle(), &self.history)?;
     
             if poll(Duration::from_millis(100))? { // If nothing happens during one second, skip that part and refresh position
                 if let Event::Key(key_event) = read()? {
@@ -80,10 +86,12 @@ impl App{
 
     fn update_history(&self, timelaps:i64) -> Result<Vec<LongLatCoordinates>, Box <dyn Error>>{
         let mut history = Vec::new();
+        let target = &self.satellites[0];
+        let propagator = target.get_propagator();
         let now = Utc::now();
         for i in -timelaps..timelaps{
             let current_step_time = now + chrono::Duration::try_minutes(i).unwrap();   
-            if let Ok(prediction) = self.propagator.get_position(current_step_time) {
+            if let Ok(prediction) = propagator.get_position(current_step_time) {
                 let coords = LongLatCoordinates::from_cartesian(prediction.position, current_step_time);
                 history.push(coords);
             }

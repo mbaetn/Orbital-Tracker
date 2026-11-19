@@ -6,7 +6,7 @@ use crossterm::{
 use crossterm::event::{KeyEvent, KeyCode::{Char}, KeyModifiers};
 use std::io::{stdout, Error, Stdout};
 use ratatui::{
-    Terminal, backend::CrosstermBackend, layout::{Constraint, Direction, Layout}, macros::constraint, style::{Color, Modifier, Style}, widgets::{Block, BorderType, Borders, Padding, Row, Table, TableState, Widget, canvas::{Canvas, Map, MapResolution, Points}},
+    Terminal, backend::CrosstermBackend, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, widgets::{Block, BorderType, Borders, Padding, Row, Table, TableState, Widget, canvas::{Canvas, Map, MapResolution, Points}},
 };
 
 // Internal imports 
@@ -71,7 +71,7 @@ impl Interface{
 
     fn get_table(pos:LongLatCoordinates, target: &TleData) -> Table<'static>{
         let rows = [Row::new(vec![
-            // target.name.unwrap(),
+            target.name.as_ref().unwrap().to_string(),
             // target.norad_id.clone(), 
            format!("{:.2}", pos.longitude), 
            format!("{:.2}", pos.latitude)
