@@ -14,11 +14,11 @@ pub struct TleData{
     // pub norad_id: String,
     /// Common name
     #[serde(rename="name")]
-    pub name: Option<String>, 
+    pub name: Option<String>,
     /// Line 1 : contains identification informations
     #[serde(rename="tle1")]
     pub line_1: String,
-    /// Line 2 : contains pure geometrical informations 
+    /// Line 2 : contains pure geometrical informations
     #[serde(rename = "tle2")]
     pub line_2: String,
 }
@@ -34,7 +34,7 @@ impl ApiClient{
         ApiClient { base_url: base_url.to_string(), api_key: api_key.to_string() }
     }
 
-    pub fn get_satellites_informations(&self)->Result<Vec<TleData>, Box<dyn Error>>{
+    pub fn get_satellites_tles(&self)->Result<Vec<TleData>, Box<dyn Error>>{
 
         let cache_file = "tle_cache.json";
         let mut needs_refresh = true; // See if we need to refresh Tle Data
@@ -50,21 +50,20 @@ impl ApiClient{
                 }
             }
         }
-        
+
         let response = if needs_refresh{
             let fetched_data = ureq::get(&self.base_url)
             .header("X-API-Key", &self.api_key)
             .call()?
             .body_mut()
             .read_to_string()?;
-        
-            println!("Pass");
+
             fs::write(cache_file, &fetched_data)?;
             fetched_data
         } else{
             fs::read_to_string(cache_file)?
         };
-    
+
 
         let mut satellites: Vec<TleData> = serde_json::from_str(&response)?;
         satellites.retain(|target| target.name.is_some());
