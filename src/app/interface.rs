@@ -12,6 +12,8 @@ use ratatui::{
 pub mod coordinates;
 use coordinates::LongLatCoordinates;
 
+use crate::app::{SatelliteState};
+
 pub struct Interface{
     terminal: Terminal<CrosstermBackend<Stdout>>,
     table_state: TableState,
@@ -49,7 +51,7 @@ impl Interface{
     }
 
     // region drawing
-    pub fn draw(&mut self, tracked_positions: Vec<(String, LongLatCoordinates)>,  history: &[LongLatCoordinates], current_page:usize, nb_pages:usize) -> Result<(), Error>{
+    pub fn draw(&mut self, tracked_positions: Vec<SatelliteState>,  history: &[LongLatCoordinates], current_page:usize, nb_pages:usize) -> Result<(), Error>{
 
         self.terminal.draw(|frame| {
             let area = frame.area();
@@ -67,7 +69,7 @@ impl Interface{
             self.visible_rows = (inner_layer[0].height as usize).saturating_sub(6);
 
             let current_selection= self.table_state.selected().expect("No satellite selected");
-            let pos  = tracked_positions[current_selection].1;
+            let pos  = tracked_positions[current_selection].pos;
             let canvas = Self::get_map_canvas(&tracked_positions, history, current_selection);
             let infos = Self::get_table(&tracked_positions, current_page, nb_pages);
             let zoomed_map = Self::get_zoomed_canvas(pos);
@@ -79,13 +81,13 @@ impl Interface{
         Ok(())
     }
 
-    fn get_table(data: &[(String, LongLatCoordinates)], current_page:usize, nb_pages:usize) -> Table<'static>{
+    fn get_table(data: &[SatelliteState], current_page:usize, nb_pages:usize) -> Table<'static>{
 
-        let rows:Vec<_> = data.iter().map(|(name, pos)| Row::new(
+        let rows:Vec<_> = data.iter().map(|target| Row::new(
             [
-            name.clone(),
-            format!("{:.2}",pos.longitude),
-            format!("{:.2}",pos.latitude),
+            target.name.clone(),
+            format!("{:.2}",target.pos.longitude),
+            format!("{:.2}",target.pos.latitude),
             ])
         ).collect();
 
@@ -135,7 +137,7 @@ impl Interface{
 
     }
 
-    fn get_map_canvas(tracked_positions: &[(String, LongLatCoordinates)], history: &[LongLatCoordinates], current_selection:usize) -> impl Widget{
+    fn get_map_canvas(tracked_positions: &[SatelliteState], history: &[LongLatCoordinates], current_selection:usize) -> impl Widget{
         Canvas::default()
                 .block(Block::default()
                     .title(" Orbital Tracker - Radar 2D (CTRL+q to quit) ")
@@ -162,16 +164,16 @@ impl Interface{
                         color:Color::Blue
                     });
 
-                    for (_name, pos) in tracked_positions {
+                    for target in tracked_positions {
                         ctx.print(
-                            pos.longitude,
-                            pos.latitude,
+                            target.pos.longitude,
+                            target.pos.latitude,
                             ratatui::text::Span::styled("+", Style::new().fg(Color::Yellow)),
                         );
                     }
 
 
-                    let pos = tracked_positions[current_selection].1;
+                    let pos = tracked_positions[current_selection].pos;
                     // Draw satellite
                     ctx.print(pos.longitude, pos.latitude, "🛰️");
                 })

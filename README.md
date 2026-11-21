@@ -1,4 +1,4 @@
 # Orbital Tracker 
 
-![[Demo.png]]
+![Demo.png]
 Implementation of a Satellite Tracker fully made in Rust. 

@@ -1,4 +1,4 @@
-use chrono::{Date, DateTime, Utc};
+use chrono::{DateTime, Utc};
 use std::{env, time::Duration};
 use std::error::Error;
 use dotenv::dotenv;
@@ -27,6 +27,11 @@ pub struct App{
     history: Vec<LongLatCoordinates>,
     should_quit: bool,
     visible_rows: usize,
+}
+
+pub struct SatelliteState{
+    name:String,
+    pos: LongLatCoordinates
 }
 
 
@@ -67,7 +72,7 @@ impl App{
             self.visible_rows = ui.get_visible_rows().max(1);
 
             let start_index = self.page_index*self.visible_rows;
-            let tracked_positions: Vec<(String, LongLatCoordinates)> = self.compute_positions(Utc::now(), start_index, start_index + self.visible_rows);
+            let tracked_positions: Vec<SatelliteState> = self.compute_positions(Utc::now(), start_index, start_index + self.visible_rows);
             let max_index = tracked_positions.len().min(self.satellites.len()).saturating_sub(1);
 
             // Case when the window size is reduced
@@ -96,10 +101,6 @@ impl App{
 
     }
 
-    fn current_selection(&self) -> &SatelliteEntity{
-        &self.satellites[self.active_satellite_index()]
-    }
-
     /// Satellite index in `satellites`
     fn active_satellite_index(&self) -> usize {
         if self.satellites.is_empty() {
@@ -121,8 +122,7 @@ impl App{
     }
 
     /// Compute positions of satellites between `start_index` and `end_index`
-    fn compute_positions(&self, now: DateTime<Utc>, start_index:usize, end_index:usize) -> Vec<(String, LongLatCoordinates)>{
-        let mut res: Vec<(String, LongLatCoordinates)> = Vec::new();
+    fn compute_positions(&self, now: DateTime<Utc>, start_index:usize, end_index:usize) -> Vec<SatelliteState>{
 
         let end = end_index.min(self.satellites.len());
         self.satellites[start_index..end]
@@ -136,12 +136,12 @@ impl App{
 
     /// Extract name and position in longitude/latitude from a `SatelliteEntity` using Option to manage errors due to SGP4
     /// (e.g outofrange excentricity) and return None
-    fn extract_satellite_info(satellite: &SatelliteEntity, now: DateTime<Utc>) -> Option<(String, LongLatCoordinates)>{
+    fn extract_satellite_info(satellite: &SatelliteEntity, now: DateTime<Utc>) -> Option<SatelliteState>{
         let name = satellite.get_tle().name.as_ref()?;
         let propagator = satellite.get_propagator();
         let evaluate_motion = propagator.get_position(now).ok()?;
         let pos = LongLatCoordinates::from_cartesian(evaluate_motion.position, now);
-        Some((name.to_string(), pos))
+        Some(SatelliteState{name: name.to_string(), pos})
     }
 
     fn update_history(&mut self, timelaps:i64) -> Result<(), Box <dyn Error>>{
