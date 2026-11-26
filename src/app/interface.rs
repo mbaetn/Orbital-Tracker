@@ -66,10 +66,14 @@ impl Interface{
                 .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(outer_layout[2]);
 
-            self.visible_rows = (inner_layer[0].height as usize).saturating_sub(6);
+            self.visible_rows = (inner_layer[0].height as usize).saturating_sub(7);
 
             let current_selection= self.table_state.selected().expect("No satellite selected");
-            let pos  = tracked_positions[current_selection].pos;
+            let pos  = if tracked_positions.is_empty(){
+                LongLatCoordinates::default()
+            } else {
+                tracked_positions[current_selection].pos
+            };
             let canvas = Self::get_map_canvas(&tracked_positions, history, current_selection);
             let infos = Self::get_table(&tracked_positions, current_page, nb_pages);
             let zoomed_map = Self::get_zoomed_canvas(pos);
@@ -173,7 +177,11 @@ impl Interface{
                     }
 
 
-                    let pos = tracked_positions[current_selection].pos;
+                    let pos = if tracked_positions.is_empty(){
+                        LongLatCoordinates::default()
+                    }else {
+                        tracked_positions[current_selection].pos
+                    };
                     // Draw satellite
                     ctx.print(pos.longitude, pos.latitude, "🛰️");
                 })

@@ -27,6 +27,9 @@ pub struct App{
     history: Vec<LongLatCoordinates>,
     should_quit: bool,
     visible_rows: usize,
+    is_searching: bool,
+    search_query: String,
+    filtered_indices: Vec<usize>,
 }
 
 pub struct SatelliteState{
@@ -52,7 +55,10 @@ impl App{
         let selected_index:usize = 0;
         let visible_rows:usize = 15;
         let page_index:usize = 0;
-        let res = Self{selected_index, page_index, satellites, history, should_quit, visible_rows};
+        let is_searching = false;
+        let search_query = String::new();
+        let filtered_indices:Vec<usize> = (0..satellites.len()).collect();
+        let res = Self{selected_index, page_index, satellites, history, should_quit, visible_rows, is_searching, search_query, filtered_indices};
 
         Ok(res)
     }
@@ -60,8 +66,9 @@ impl App{
     fn to_satellite_entity(target: TleData) -> Result<Option<SatelliteEntity>, Box<dyn Error>>{
         let propagator = SGP4Propagator::new(&target)?;
         Ok(Some(SatelliteEntity::new(target, propagator)))
-
     }
+
+
     pub fn run(&mut self) -> Result<(), Box<dyn Error>>{
 
         let mut ui = Interface::new()?;
@@ -73,12 +80,14 @@ impl App{
 
             let start_index = self.page_index*self.visible_rows;
             let tracked_positions: Vec<SatelliteState> = self.compute_positions(Utc::now(), start_index, start_index + self.visible_rows);
-            let max_index = tracked_positions.len().min(self.satellites.len()).saturating_sub(1);
-
-            // Case when the window size is reduced
-            if self.selected_index > max_index{
-                self.select_satellite(self.selected_index.min(max_index))?;
+            let max_index = tracked_positions.len().saturating_sub(1);
+            if tracked_positions.is_empty() {
+                self.selected_index = 0;
+            } else if self.selected_index > max_index {// Case when the window size is reduced
+                  self.select_satellite(max_index)?;
             }
+
+
 
 
             // Update UI
@@ -101,18 +110,19 @@ impl App{
 
     }
 
-    /// Satellite index in `satellites`
+    /// Satellite index in `filtered_satellites`
     fn active_satellite_index(&self) -> usize {
-        if self.satellites.is_empty() {
+        let filtered_satellites:Vec<&SatelliteEntity> = self.filtered_indices.iter().map(|&i| self.satellites.get(i).unwrap()).collect();
+        if self.filtered_indices.is_empty() {
             return 0;
         }
         let page_size = self.visible_rows.max(1);
         let raw = self.page_index.saturating_mul(page_size).saturating_add(self.selected_index);
-        raw.min(self.satellites.len() - 1)
+        raw.min(filtered_satellites.len()-1)
     }
 
     fn calculate_page_count(&self)->usize{
-        self.satellites.len().saturating_div(self.visible_rows)
+        self.filtered_indices.len().div_ceil(self.visible_rows.max(1)).max(1)
     }
 
     fn select_satellite(&mut self, index:usize) -> Result<(), Box <dyn Error>>{
@@ -123,9 +133,9 @@ impl App{
 
     /// Compute positions of satellites between `start_index` and `end_index`
     fn compute_positions(&self, now: DateTime<Utc>, start_index:usize, end_index:usize) -> Vec<SatelliteState>{
-
-        let end = end_index.min(self.satellites.len());
-        self.satellites[start_index..end]
+        let filtered_satellites:Vec<&SatelliteEntity> = self.filtered_indices.iter().map(|&i| self.satellites.get(i).unwrap()).collect();
+        let end = end_index.min(filtered_satellites.len());
+        filtered_satellites[start_index..end]
             .iter()
             .filter_map(|target| Self::extract_satellite_info(target, now))
             .collect()
@@ -144,10 +154,41 @@ impl App{
         Some(SatelliteState{name: name.to_string(), pos})
     }
 
+    fn update_satellites(&mut self) {
+        let query = self.search_query.trim().to_lowercase();
+
+        if query.is_empty() {
+            self.filtered_indices = (0..self.satellites.len()).collect();
+        } else {
+            self.filtered_indices = self
+                .satellites
+                .iter()
+                .enumerate()
+                .filter_map(|(index, sat)| {
+                    let name = sat.get_tle().name.as_deref()?;
+                    name.to_lowercase().contains(&query).then_some(index)
+                })
+                .collect();
+        }
+
+        self.page_index = 0;
+        self.selected_index = 0;
+    }
+
+
     fn update_history(&mut self, timelaps:i64) -> Result<(), Box <dyn Error>>{
         let mut history = Vec::new();
-        let active_index = self.active_satellite_index();
-        let target = &self.satellites[active_index];
+
+        if self.filtered_indices.is_empty(){
+            self.history.clear();
+            return Ok(())
+        }
+        let active_index = self.active_satellite_index(); // active_satellite_index gives in filtered_satellites,
+        let real_index = self.filtered_indices.get(active_index).copied().unwrap_or(0); // get the matching index in satellites
+        let target = &self.satellites[real_index];
+
+
+
         let propagator = target.get_propagator();
         let now = Utc::now();
         for i in -timelaps..timelaps{
@@ -177,6 +218,10 @@ impl App{
             Command::Previous=> self.process_previous_command(),
             Command::NextPage => self.process_next_page_command(),
             Command::PreviousPage => self.process_previous_page_command(),
+            Command::ToggleSearch => self.process_enter_search(),
+            Command::InputChar(c) => self.process_input_char(c),
+            Command::ClearSearch => self.process_clear_search(),
+            Command::RemoveChar => self.process_remove_char(),
             _ => (),
         }
     }
@@ -200,5 +245,41 @@ impl App{
     fn process_previous_command(&mut self){
         let new_index = 0.max(self.selected_index.saturating_sub(1));
         let _= self.select_satellite(new_index);
+    }
+
+    fn process_enter_search(&mut self){
+        self.is_searching = !self.is_searching;
+    }
+
+
+    fn process_input_char(&mut self, c:char){
+        if self.is_searching{
+            self.search_query.push(c);
+            self.update_satellites();
+            let _= self.update_history(45);
+        }
+    }
+
+    fn process_clear_search(&mut self){
+        if self.is_searching{
+            self.search_query.clear();
+            self.is_searching = false;
+            self.update_satellites();
+            let _= self.update_history(45);
+        }
+    }
+
+    fn process_remove_char(&mut self){
+        if self.is_searching{
+            match self.search_query.pop(){
+                Some(c) => {
+                    self.update_satellites();
+                    let _= self.update_history(45);
+                }
+                _ => {
+                    self.process_clear_search();
+                }
+            }
+        }
     }
 }

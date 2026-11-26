@@ -1,11 +1,19 @@
 use crossterm::event::{KeyCode::{self, Char}, KeyEvent, KeyModifiers};
 
+/// Interaction with user
 pub enum Command{
+    // Table Navigation
     Quit,
     Next,
     Previous,
     NextPage,
-    PreviousPage
+    PreviousPage,
+    // Search query to filter satellites
+    InputChar(char),
+    ToggleSearch,
+    ClearSearch,
+    RemoveChar,
+
 }
 
 
@@ -29,6 +37,10 @@ impl TryFrom<KeyEvent> for Command{
                 KeyCode::Up => Ok(Self::Previous),
                 KeyCode::Right => Ok(Self::NextPage),
                 KeyCode::Left => Ok(Self::PreviousPage),
+                KeyCode::Esc => Ok(Self::ClearSearch),
+                KeyCode::Backspace => Ok(Self::RemoveChar),
+                Char('/') => Ok(Self::ToggleSearch),
+                Char(c) => Ok(Self::InputChar(c)),
                 _ => Err(format!("Unsupported Control+{code:?} combination"))
             }
         }
