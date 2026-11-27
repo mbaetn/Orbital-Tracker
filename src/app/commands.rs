@@ -13,6 +13,7 @@ pub enum Command{
     ToggleSearch,
     ClearSearch,
     RemoveChar,
+    Enter,
 
 }
 
@@ -39,6 +40,7 @@ impl TryFrom<KeyEvent> for Command{
                 KeyCode::Left => Ok(Self::PreviousPage),
                 KeyCode::Esc => Ok(Self::ClearSearch),
                 KeyCode::Backspace => Ok(Self::RemoveChar),
+                KeyCode::Enter => Ok(Self::Enter),
                 Char('/') => Ok(Self::ToggleSearch),
                 Char(c) => Ok(Self::InputChar(c)),
                 _ => Err(format!("Unsupported Control+{code:?} combination"))

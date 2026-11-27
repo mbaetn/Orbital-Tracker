@@ -37,6 +37,12 @@ pub struct SatelliteState{
     pos: LongLatCoordinates
 }
 
+#[derive(Clone, Copy)]
+pub struct SearchState<'a> {
+    pub is_searching: bool,
+    pub query: &'a str,
+}
+
 
 impl App{
 
@@ -78,7 +84,7 @@ impl App{
         while !self.should_quit{
             self.visible_rows = ui.get_visible_rows().max(1);
 
-            let start_index = self.page_index*self.visible_rows;
+            let start_index = (self.page_index)*self.visible_rows;
             let tracked_positions: Vec<SatelliteState> = self.compute_positions(Utc::now(), start_index, start_index + self.visible_rows);
             let max_index = tracked_positions.len().saturating_sub(1);
             if tracked_positions.is_empty() {
@@ -93,8 +99,8 @@ impl App{
             // Update UI
             ui.set_selected_row(self.selected_index);
             let nb_pages = self.calculate_page_count();
-
-            ui.draw(tracked_positions, &self.history, self.page_index, nb_pages)?;
+            let search_state = SearchState{is_searching:self.is_searching, query: &self.search_query};
+            ui.draw(tracked_positions, &self.history, self.page_index, nb_pages, search_state)?;
 
 
             if poll(Duration::from_millis(1000))? { // If nothing happens during dt, skip that part and refresh position
@@ -122,7 +128,7 @@ impl App{
     }
 
     fn calculate_page_count(&self)->usize{
-        self.filtered_indices.len().div_ceil(self.visible_rows.max(1)).max(1)
+        self.filtered_indices.len().div_ceil(self.visible_rows.max(1))
     }
 
     fn select_satellite(&mut self, index:usize) -> Result<(), Box <dyn Error>>{
@@ -222,10 +228,16 @@ impl App{
             Command::InputChar(c) => self.process_input_char(c),
             Command::ClearSearch => self.process_clear_search(),
             Command::RemoveChar => self.process_remove_char(),
-            _ => (),
+            Command::Enter => self.process_enter(),
         }
     }
 
+    fn process_enter(&mut self){
+        if self.is_searching{
+            self.is_searching = false;
+        }
+
+    }
     fn process_next_command(&mut self){
         let new_index = (self.selected_index.saturating_add(1)).min(self.visible_rows-1);
         let _= self.select_satellite(new_index);
@@ -233,7 +245,7 @@ impl App{
 
     fn process_next_page_command(&mut self){
         let nb_page = self.calculate_page_count();
-        self.page_index = self.page_index.saturating_add(1).min(nb_page);
+        self.page_index = self.page_index.saturating_add(1).min(nb_page.saturating_sub(1)); // index pages : 0..nb_pages-1
         let _= self.select_satellite(self.selected_index); // Update the satellite at the current index
     }
 
@@ -248,7 +260,7 @@ impl App{
     }
 
     fn process_enter_search(&mut self){
-        self.is_searching = !self.is_searching;
+        self.is_searching = true;
     }
 
 
@@ -261,18 +273,18 @@ impl App{
     }
 
     fn process_clear_search(&mut self){
-        if self.is_searching{
-            self.search_query.clear();
-            self.is_searching = false;
-            self.update_satellites();
-            let _= self.update_history(45);
-        }
+
+        self.search_query.clear();
+        self.is_searching = false;
+        self.update_satellites();
+        let _= self.update_history(45);
+
     }
 
     fn process_remove_char(&mut self){
         if self.is_searching{
             match self.search_query.pop(){
-                Some(c) => {
+                Some(_c) => {
                     self.update_satellites();
                     let _= self.update_history(45);
                 }

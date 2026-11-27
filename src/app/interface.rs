@@ -5,14 +5,14 @@ use crossterm::{
 };
 use std::io::{stdout, Error, Stdout};
 use ratatui::{
-    Terminal, backend::CrosstermBackend, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, widgets::{Block, BorderType, Borders, Padding, Row, Table, TableState, Widget, canvas::{Canvas, Map, MapResolution, Points}},
+    Terminal, backend::CrosstermBackend, layout::{Constraint, Direction, Layout}, style::{Color, Modifier, Style}, text::{Span, Line}, widgets::{Block, BorderType, Borders, Padding, Paragraph, Row, Table, TableState, Widget, canvas::{Canvas, Map, MapResolution, Points}},
 };
 
 // Internal imports
 pub mod coordinates;
 use coordinates::LongLatCoordinates;
 
-use crate::app::{SatelliteState};
+use crate::app::{SatelliteState, SearchState};
 
 pub struct Interface{
     terminal: Terminal<CrosstermBackend<Stdout>>,
@@ -51,16 +51,21 @@ impl Interface{
     }
 
     // region drawing
-    pub fn draw(&mut self, tracked_positions: Vec<SatelliteState>,  history: &[LongLatCoordinates], current_page:usize, nb_pages:usize) -> Result<(), Error>{
+    pub fn draw(&mut self, tracked_positions: Vec<SatelliteState>,  history: &[LongLatCoordinates], current_page:usize, nb_pages:usize, search_state: SearchState) -> Result<(), Error>{
 
         self.terminal.draw(|frame| {
             let area = frame.area();
+
+            let root_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(0), Constraint::Length(1)])
+                .split(area);
 
             let outer_layout  = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1)
                 .constraints(vec![Constraint::Percentage(70), Constraint::Length(1), Constraint::Percentage(30)]) // Length 1 is a spacer
-                .split(area);
+                .split(root_layout[0]);
             let inner_layer = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -75,14 +80,39 @@ impl Interface{
                 tracked_positions[current_selection].pos
             };
             let canvas = Self::get_map_canvas(&tracked_positions, history, current_selection);
-            let infos = Self::get_table(&tracked_positions, current_page, nb_pages);
+            let page_number:usize = current_page.saturating_add(1);
+            let infos = Self::get_table(&tracked_positions, page_number, nb_pages);
             let zoomed_map = Self::get_zoomed_canvas(pos);
+            let status_line = Self::get_status_bar(search_state);
 
+            frame.render_widget(Paragraph::new(status_line), root_layout[1]);
             frame.render_widget(canvas, outer_layout[0]);
             frame.render_stateful_widget(infos, inner_layer[0], &mut self.table_state);
             frame.render_widget(zoomed_map, inner_layer[1]);
         })?;
         Ok(())
+    }
+
+    fn get_status_bar<'a>(search_state: SearchState<'a>) -> Line<'a> {
+        if search_state.is_searching {
+            Line::from(vec![
+                Span::styled(
+                    "/",
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(search_state.query),
+                Span::styled("█", Style::default().fg(Color::Yellow)),
+            ])
+        } else if !search_state.query.is_empty() {
+            Line::from(Span::raw(format!(
+                " Searching : \"{}\"  |  / : search  |  Esc : clean filter ",
+                search_state.query
+            )))
+        } else {
+            Line::from(Span::raw(
+                " / : Search  |  Ctrl+Q : quit ",
+            ))
+        }
     }
 
     fn get_table(data: &[SatelliteState], current_page:usize, nb_pages:usize) -> Table<'static>{
@@ -102,7 +132,7 @@ impl Interface{
         ];
         Table::new(rows, widths)
             .block(Block::default()
-                .title(format!(" Satellites Menu - {}/{} ", current_page, nb_pages))
+                .title(format!(" Satellites Menu - {}/{} ", current_page, nb_pages.max(1)))
                 .padding(Padding::uniform(1))
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded))
@@ -144,7 +174,7 @@ impl Interface{
     fn get_map_canvas(tracked_positions: &[SatelliteState], history: &[LongLatCoordinates], current_selection:usize) -> impl Widget{
         Canvas::default()
                 .block(Block::default()
-                    .title(" Orbital Tracker - Radar 2D (CTRL+q to quit) ")
+                    .title(" Orbital Tracker - Radar 2D ")
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                 )
